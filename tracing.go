@@ -16,14 +16,32 @@ import (
 )
 
 var (
-	AppName     = "my-app"
-	Environment = "development"
-	PeerName    = "https://localhost:8080"
-	PeerPort    = ":8080"
+	AppName           = "my-app"
+	Environment       = "development"
+	PeerName          = "https://localhost:8080"
+	PeerPort          = ":8080"
+	MessagingSystem   = "rabbitmq"
+	MessagingProtocol = "AMQP"
+	MessagingVersion  = "0.9.1"
 )
 
 type EndUserIdReceiver interface {
 	GetEndUserId(ctx context.Context) string
+}
+
+func GetMessagingTracerProvider(jaegerHost, jaegerPort string, attributes ...attribute.KeyValue) (*tracesdk.TracerProvider, error) {
+	attrs := []attribute.KeyValue{
+		semconv.MessagingSystemKey.String(MessagingSystem),
+		semconv.MessagingDestinationKindQueue,
+		semconv.MessagingProtocolKey.String(MessagingProtocol),
+		semconv.MessagingProtocolVersionKey.String(MessagingVersion),
+	}
+
+	return NewTracerProvider(
+		jaegerHost,
+		jaegerPort,
+		append(attrs, attributes...)...,
+	)
 }
 
 func NewTracerProvider(jaegerHost, jaegerPort string, attributes ...attribute.KeyValue) (*tracesdk.TracerProvider, error) {
