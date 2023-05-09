@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	tracer "go-opentelemetry-jaeger"
+	otel "github.com/vsvp21/go-opentelemetry-jaeger"
 	"net/http"
 	"time"
 
@@ -17,13 +17,13 @@ func (r *endUserReceiverFromCtx) GetEndUserId(ctx context.Context) string {
 
 func main() {
 	r := gin.Default()
-	r.GET("/ping", tracer.GinMiddleware(&endUserReceiverFromCtx{}, "ykim.made.kz", "6831"), func(c *gin.Context) {
-		_, span := tracer.NewSpanFromGinContext(c, "test")
+	r.GET("/ping", otel.GinMiddleware(&endUserReceiverFromCtx{}, "127.0.0.1", "6831", 0.5), func(c *gin.Context) {
+		_, span := otel.NewSpanFromGinContext(c, "test")
 		time.Sleep(time.Second)
 		span.End()
 
-		ctx, span := tracer.NewSpanFromGinContext(c, "test1")
-		_, span1 := tracer.NewSpan(ctx, "test1-inner")
+		ctx, span := otel.NewSpanFromGinContext(c, "test1")
+		_, span1 := otel.NewSpan(ctx, "test1-inner")
 		time.Sleep(time.Second)
 		span1.End()
 		span.End()

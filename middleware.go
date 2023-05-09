@@ -5,14 +5,15 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/propagation"
-	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 )
 
-func GinMiddleware(endUserIdReceiver EndUserIdReceiver, jaegerHost, jaegerPort string) gin.HandlerFunc {
+func GinMiddleware(endUserIdReceiver EndUserIdReceiver, jaegerHost, jaegerPort string, sampleRate float64) gin.HandlerFunc {
 	return func(ginCtx *gin.Context) {
 		tp, err := NewTracerProvider(
 			jaegerHost,
 			jaegerPort,
+			sampleRate,
 			semconv.NetPeerPortKey.String(PeerPort),
 			semconv.HTTPSchemeKey.String(Scheme),
 			semconv.EnduserIDKey.String(endUserIdReceiver.GetEndUserId(ginCtx)),

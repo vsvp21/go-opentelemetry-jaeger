@@ -29,7 +29,7 @@ type EndUserIdReceiver interface {
 	GetEndUserId(ctx context.Context) string
 }
 
-func GetMessagingTracerProvider(jaegerHost, jaegerPort string, attributes ...attribute.KeyValue) (*tracesdk.TracerProvider, error) {
+func GetMessagingTracerProvider(jaegerHost, jaegerPort string, sampleRate float64, attributes ...attribute.KeyValue) (*tracesdk.TracerProvider, error) {
 	attrs := []attribute.KeyValue{
 		semconv.MessagingSystemKey.String(MessagingSystem),
 		semconv.MessagingDestinationKindQueue,
@@ -40,11 +40,12 @@ func GetMessagingTracerProvider(jaegerHost, jaegerPort string, attributes ...att
 	return NewTracerProvider(
 		jaegerHost,
 		jaegerPort,
+		sampleRate,
 		append(attrs, attributes...)...,
 	)
 }
 
-func NewTracerProvider(jaegerHost, jaegerPort string, attributes ...attribute.KeyValue) (*tracesdk.TracerProvider, error) {
+func NewTracerProvider(jaegerHost, jaegerPort string, sampleRate float64, attributes ...attribute.KeyValue) (*tracesdk.TracerProvider, error) {
 	otel.SetTextMapPropagator(jaeger2.Jaeger{})
 
 	jaegerAgent := jaeger.WithAgentEndpoint(
@@ -58,6 +59,7 @@ func NewTracerProvider(jaegerHost, jaegerPort string, attributes ...attribute.Ke
 	}
 
 	tp := tracesdk.NewTracerProvider(
+		tracesdk.WithSampler(tracesdk.TraceIDRatioBased(sampleRate)),
 		tracesdk.WithBatcher(exporter),
 		tracesdk.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
