@@ -86,7 +86,7 @@ func getAttributes(attributes []attribute.KeyValue) []attribute.KeyValue {
 		semconv.NetHostNameKey.String(hostname),
 		semconv.TelemetrySDKNameKey.String("opentelemetry"),
 		semconv.TelemetrySDKLanguageGo,
-		semconv.TelemetrySDKVersionKey.String("1.9.0"),
+		semconv.TelemetrySDKVersionKey.String("1.15.1"),
 		semconv.ProcessRuntimeNameKey.String("go"),
 		semconv.ProcessRuntimeVersionKey.String(runtime.Version()),
 	)
