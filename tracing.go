@@ -10,31 +10,34 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.18.0"
 	"go.opentelemetry.io/otel/trace"
 	"os"
+	"runtime"
 )
 
 var (
-	AppName           = "my-app"
-	Environment       = "development"
-	PeerName          = "https://localhost:8080"
-	PeerPort          = ":8080"
-	MessagingSystem   = "rabbitmq"
-	MessagingProtocol = "AMQP"
-	MessagingVersion  = "0.9.1"
+	AppName         = "my-app"
+	Environment     = "development"
+	PeerName        = "https://localhost:8080"
+	PeerPort        = ":8080"
+	MessagingSystem = "rabbitmq"
 )
 
 type EndUserIdReceiver interface {
 	GetEndUserId(ctx context.Context) string
 }
 
+type NoOpEndUserIdReceiver struct{}
+
+func (r *NoOpEndUserIdReceiver) GetEndUserId(ctx context.Context) string {
+	return ""
+}
+
 func GetMessagingTracerProvider(jaegerHost, jaegerPort string, sampleRate float64, attributes ...attribute.KeyValue) (*tracesdk.TracerProvider, error) {
 	attrs := []attribute.KeyValue{
 		semconv.MessagingSystemKey.String(MessagingSystem),
-		semconv.MessagingDestinationKindQueue,
-		semconv.MessagingProtocolKey.String(MessagingProtocol),
-		semconv.MessagingProtocolVersionKey.String(MessagingVersion),
+		semconv.MessagingDestinationKindTopic,
 	}
 
 	return NewTracerProvider(
@@ -77,10 +80,15 @@ func getAttributes(attributes []attribute.KeyValue) []attribute.KeyValue {
 	attributes = append(
 		attributes,
 		semconv.DeploymentEnvironmentKey.String(Environment),
-		semconv.NetTransportIP,
+		semconv.NetTransportTCP,
 		semconv.ServiceNameKey.String(AppName),
 		semconv.NetPeerNameKey.String(PeerName),
 		semconv.NetHostNameKey.String(hostname),
+		semconv.TelemetrySDKNameKey.String("opentelemetry"),
+		semconv.TelemetrySDKLanguageGo,
+		semconv.TelemetrySDKVersionKey.String("1.9.0"),
+		semconv.ProcessRuntimeNameKey.String("go"),
+		semconv.ProcessRuntimeVersionKey.String(runtime.Version()),
 	)
 
 	return attributes
