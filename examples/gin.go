@@ -3,21 +3,31 @@ package main
 import (
 	"context"
 	otel "github.com/vsvp21/go-opentelemetry-jaeger"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
-type endUserReceiverFromCtx struct{}
-
-func (r *endUserReceiverFromCtx) GetEndUserId(ctx context.Context) string {
+func ginEndUserId(ctx context.Context) string {
 	return ctx.(*gin.Context).GetHeader("X-User-Id")
 }
 
 func main() {
+	otel.PeerName = "127.0.0.1"
+	otel.PeerPort = "8080"
+
+	// register tracer provider globally
+	tp, err := otel.NewTracerProvider("localhost", "6381", 1)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer tp.Shutdown(context.Background())
+
+	// serve
 	r := gin.Default()
-	r.GET("/ping", otel.GinMiddleware(&endUserReceiverFromCtx{}, "127.0.0.1", "6831", 0.5), func(c *gin.Context) {
+	r.GET("/ping", otel.GinMiddleware(ginEndUserId), func(c *gin.Context) {
 		_, span := otel.NewSpanFromGinContext(c, "test")
 		time.Sleep(time.Second)
 		span.End()

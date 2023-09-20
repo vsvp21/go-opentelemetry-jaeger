@@ -16,38 +16,33 @@ import (
 	"runtime"
 )
 
+const ContextTracerKey = "Tracer-context"
+
 var (
-	AppName         = "my-app"
-	Environment     = "development"
-	PeerName        = "https://localhost:8080"
-	PeerPort        = ":8080"
+	// AppName service name for jaeger ui
+	AppName = "my-app"
+	// Environment env for jaeger ui
+	Environment = "development"
+	// PeerName peer name according to specs
+	PeerName = "https://localhost"
+	// PeerPort peer port according to specs
+	PeerPort = ":8080"
+	// MessagingSystem message broker type according to specification
 	MessagingSystem = "rabbitmq"
 )
 
-type EndUserIdReceiver interface {
-	GetEndUserId(ctx context.Context) string
-}
+// EndUserIdReceiver retrieves user id from context
+type EndUserIdReceiver func(ctx context.Context) string
 
-type NoOpEndUserIdReceiver struct{}
-
-func (r *NoOpEndUserIdReceiver) GetEndUserId(ctx context.Context) string {
+// NoOpEndUserId ...
+func NoOpEndUserId(ctx context.Context) string {
 	return ""
 }
 
-func GetMessagingTracerProvider(jaegerHost, jaegerPort string, sampleRate float64, attributes ...attribute.KeyValue) (*tracesdk.TracerProvider, error) {
-	attrs := []attribute.KeyValue{
-		semconv.MessagingSystemKey.String(MessagingSystem),
-		semconv.MessagingDestinationKindTopic,
-	}
-
-	return NewTracerProvider(
-		jaegerHost,
-		jaegerPort,
-		sampleRate,
-		append(attrs, attributes...)...,
-	)
-}
-
+// NewTracerProvider creates new tracer provider with jaeger exporter
+// registers tracer provider globally
+// registers jaeger text map propagator globally
+// also sets basic otel attributes accoding to specification
 func NewTracerProvider(jaegerHost, jaegerPort string, sampleRate float64, attributes ...attribute.KeyValue) (*tracesdk.TracerProvider, error) {
 	otel.SetTextMapPropagator(jaeger2.Jaeger{})
 
@@ -61,12 +56,25 @@ func NewTracerProvider(jaegerHost, jaegerPort string, sampleRate float64, attrib
 		return nil, err
 	}
 
+	hostname, _ := os.Hostname()
 	tp := tracesdk.NewTracerProvider(
 		tracesdk.WithSampler(tracesdk.TraceIDRatioBased(sampleRate)),
 		tracesdk.WithBatcher(exporter),
 		tracesdk.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
-			getAttributes(attributes)...,
+			append(
+				attributes,
+				semconv.DeploymentEnvironmentKey.String(Environment),
+				semconv.NetTransportTCP,
+				semconv.ServiceNameKey.String(AppName),
+				semconv.NetPeerNameKey.String(PeerName),
+				semconv.NetHostNameKey.String(hostname),
+				semconv.TelemetrySDKNameKey.String("opentelemetry"),
+				semconv.TelemetrySDKLanguageGo,
+				semconv.TelemetrySDKVersionKey.String("1.19.0"),
+				semconv.ProcessRuntimeNameKey.String("go"),
+				semconv.ProcessRuntimeVersionKey.String(runtime.Version()),
+			)...,
 		)),
 	)
 
@@ -75,50 +83,54 @@ func NewTracerProvider(jaegerHost, jaegerPort string, sampleRate float64, attrib
 	return tp, nil
 }
 
-func getAttributes(attributes []attribute.KeyValue) []attribute.KeyValue {
-	hostname, _ := os.Hostname()
-	attributes = append(
-		attributes,
-		semconv.DeploymentEnvironmentKey.String(Environment),
-		semconv.NetTransportTCP,
-		semconv.ServiceNameKey.String(AppName),
-		semconv.NetPeerNameKey.String(PeerName),
-		semconv.NetHostNameKey.String(hostname),
-		semconv.TelemetrySDKNameKey.String("opentelemetry"),
-		semconv.TelemetrySDKLanguageGo,
-		semconv.TelemetrySDKVersionKey.String("1.15.1"),
-		semconv.ProcessRuntimeNameKey.String("go"),
-		semconv.ProcessRuntimeVersionKey.String(runtime.Version()),
-	)
-
-	return attributes
-}
-
+// NewSpan creates new span with additional attributes if passed
 func NewSpan(ctx context.Context, spanName string, attributes ...attribute.KeyValue) (context.Context, trace.Span) {
 	tr := otel.Tracer(AppName)
 
 	return tr.Start(ctx, spanName, trace.WithAttributes(attributes...))
 }
 
+// NewRabbitMQSpan creates new span for rabbitmq listener with additional attributes if passed
+func NewRabbitMQSpan(ctx context.Context, spanName, consumerName, routingKey string, attributes ...attribute.KeyValue) (context.Context, trace.Span) {
+	attrs := []attribute.KeyValue{
+		semconv.MessagingSystemKey.String(MessagingSystem),
+		semconv.MessagingDestinationKindTopic,
+		semconv.MessagingOperationKey.String(consumerName),
+		semconv.MessagingRabbitmqDestinationRoutingKey(routingKey),
+	}
+
+	return NewSpan(
+		ctx,
+		spanName,
+		append(attrs, attributes...)...,
+	)
+
+}
+
+// NewSpanFromGinContext creates new span from gin context with additional attributes if passed
 func NewSpanFromGinContext(ctx *gin.Context, spanName string, attributes ...attribute.KeyValue) (context.Context, trace.Span) {
 	return NewSpan(GetSpanContext(ctx), spanName, attributes...)
 }
 
+// Inject injects trace id data to HeaderCarrier, needed to pass trace id further to next service
 func Inject(ctx context.Context, carrier propagation.HeaderCarrier) {
 	p := otel.GetTextMapPropagator()
 	p.Inject(ctx, carrier)
 }
 
+// Extract extracts trace id data from HeaderCarrier, needed to get trace from request
 func Extract(ctx context.Context, carrier propagation.HeaderCarrier) context.Context {
 	p := otel.GetTextMapPropagator()
 
 	return p.Extract(ctx, carrier)
 }
 
+// InjectSpanInGinContext injects trace id to gin context
 func InjectSpanInGinContext(ctx context.Context, gCtx *gin.Context) {
 	gCtx.Set(ContextTracerKey, ctx)
 }
 
+// GetSpanContext get trace id from context
 func GetSpanContext(ctx context.Context) context.Context {
 	val := ctx.Value(ContextTracerKey)
 	if sp, ok := val.(context.Context); ok {
