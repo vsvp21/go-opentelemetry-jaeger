@@ -12,11 +12,14 @@ import (
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.18.0"
 	"go.opentelemetry.io/otel/trace"
+	"net/http"
 	"os"
 	"runtime"
 )
 
 const ContextTracerKey = "Tracer-context"
+
+type IdentityKey string
 
 var (
 	// AppName service name for jaeger ui
@@ -29,6 +32,8 @@ var (
 	PeerPort = ":8080"
 	// MessagingSystem message broker type according to specification
 	MessagingSystem = "rabbitmq"
+	// UserIdentityKey key that represents user identity in http headers
+	UserIdentityKey IdentityKey = "X-User-Id"
 )
 
 // EndUserIdReceiver retrieves user id from context
@@ -37,6 +42,14 @@ type EndUserIdReceiver func(ctx context.Context) string
 // NoOpEndUserId ...
 func NoOpEndUserId(ctx context.Context) string {
 	return ""
+}
+
+func GinEndUserIdReceiver(ctx context.Context) string {
+	return ctx.(*gin.Context).GetHeader(string(UserIdentityKey))
+}
+
+func HTTPEndUserIdReceiver(ctx context.Context) string {
+	return ctx.Value(UserIdentityKey).(string)
 }
 
 // NewTracerProvider creates new tracer provider with jaeger exporter
@@ -138,4 +151,22 @@ func GetSpanContext(ctx context.Context) context.Context {
 	}
 
 	return ctx
+}
+
+// ResponseWriter helps to intercept http status code from http.ResponseWriter
+type ResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+// NewResponseWriter creates a new responseWriter instance.
+func NewResponseWriter(w http.ResponseWriter) *ResponseWriter {
+	// Default the status code to 200, since that's what net/http defaults to.
+	return &ResponseWriter{w, http.StatusOK}
+}
+
+// WriteHeader captures the status code for logging and calls the underlying WriteHeader method.
+func (rw *ResponseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
 }

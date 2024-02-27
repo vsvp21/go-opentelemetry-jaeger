@@ -10,10 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func ginEndUserId(ctx context.Context) string {
-	return ctx.(*gin.Context).GetHeader("X-User-Id")
-}
-
 func main() {
 	otel.PeerName = "127.0.0.1"
 	otel.PeerPort = "8080"
@@ -27,7 +23,7 @@ func main() {
 
 	// serve
 	r := gin.Default()
-	r.GET("/ping", otel.GinMiddleware(ginEndUserId), func(c *gin.Context) {
+	r.GET("/ping", otel.GinMiddleware(otel.GinEndUserIdReceiver), func(c *gin.Context) {
 		_, span := otel.NewSpanFromGinContext(c, "test")
 		time.Sleep(time.Second)
 		span.End()
