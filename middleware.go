@@ -45,7 +45,7 @@ func HTTPMiddleware(endUserIdReceiver EndUserIdReceiver, next http.Handler) http
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		ctx := Extract(req.Context(), propagation.HeaderCarrier(req.Header))
 
-		ctx, span := NewSpan(ctx, fmt.Sprintf("%s %s", req.Method, req.URL.RawPath))
+		ctx, span := NewSpan(ctx, fmt.Sprintf("%s %s", req.Method, req.URL.Path))
 
 		req = req.WithContext(context.WithValue(ctx, UserIdentityKey, req.Header.Get(string(UserIdentityKey))))
 
